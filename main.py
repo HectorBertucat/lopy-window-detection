@@ -11,15 +11,20 @@ WIFI_SSID = "Vodafone-2998D2"
 PASSWORD = "GMkDV28KjDABFh37"
 
 # Define ThingSpeak variables
-THINGSPEAK_API_KEY = '74Z2BWQHJHOPFQCG'  # Replace with your ThingSpeak API key
+# Statics
 THINGSPEAK_BASE_URL = 'https://api.thingspeak.com/update'
-THINGSPEAK_CHANNEL_ID = '2402760'
-THINGSPEAK_CLIENT_ID = 'GRwEKA8PGiAkDAMNEQoiFT0'
 THINGSPEAK_MQTT_HOST = 'mqtt3.thingspeak.com'
-THINGSPEAK_MQTT_PASSWORD = 'U0rTBfXygeELaHRtv7Pn4zEw'
 THINGSPEAK_PUB_FIELD = 'field1'
 
-last_distance = None
+# Account MQTT credentials
+THINGSPEAK_CLIENT_ID = 'GRwEKA8PGiAkDAMNEQoiFT0'
+THINGSPEAK_MQTT_PASSWORD = 'U0rTBfXygeELaHRtv7Pn4zEw'
+
+# Channel credentials
+THINGSPEAK_CHANNEL_ID = '2402819'
+THINGSPEAK_API_KEY = 'V1WGRM3WH4CZJSZW'  # Replace with your ThingSpeak API key
+
+window_state = None
 
 # ----- Define Pins -----
 
@@ -49,6 +54,10 @@ def measure_distance():
     distance = ((finish - start) / 1_000_000) * 34300 / 2
 
     return distance
+
+def pub_to_thingspeak(state):
+    # Publish the distance to ThingSpeak
+    client.publish(topic="channels/{:s}/publish/fields/{:s}".format(THINGSPEAK_CHANNEL_ID, THINGSPEAK_PUB_FIELD), msg=str(state))
 
 # ----- WiFi Setup -----
 
@@ -86,11 +95,26 @@ while True:
     # Measure the distance
     distance = measure_distance()
 
-    # Print the distance
-    print("Distance: {} cm".format(distance))
+    new_state = 0 if distance < 4 else 1
 
-    # Publish the distance to ThingSpeak
-    client.publish(topic="channels/{:s}/publish/fields/{:s}".format(THINGSPEAK_CHANNEL_ID, THINGSPEAK_PUB_FIELD), msg=str(distance))
+    print('Distance: ' + str(distance) + ' cm')
+    
+    if window_state is not None and window_state != new_state:
+        print('Window has been ' + ('opened' if new_state == 0 else 'closed'))
+        pub_to_thingspeak(new_state)
+    else:
+        print('No change in window state')
 
-    # Wait 5 seconds
+    if window_state is None:
+        # Always publish the first state (in case of reboot)
+        print('Sending first state: ' + ('opened' if new_state == 0 else 'closed'))
+        pub_to_thingspeak(new_state)
+
+    # Update the window state
+    window_state = new_state
+
+    # Wait x seconds (test purposes)
     time.sleep(5)
+
+    # Put in deep sleep for 1 minute (in production to save battery)
+    # machine.deepsleep(60000)
