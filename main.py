@@ -1,29 +1,29 @@
-import machine
 import time
 import pycom
-import network
+from network import WLAN
+import machine
 import os
 
+print("Starting the program...")
+
+pycom.heartbeat(False)
+
 # Define the network credentials
-WIFI_SSID = 'SSID'
-PASSWORD = "PASSWORD"
+WIFI_SSID = "Vodafone-2998D2"
+PASSWORD = "GMkDV28KjDABFh37"
 
 # Define the pins for TRIG and ECHO
 trig = machine.Pin('P12', mode=machine.Pin.OUT)
 echo = machine.Pin('P11', mode=machine.Pin.IN)
 
 # Initialize the WiFi interface
-wifi = network.WLAN(network.STA_IF)
-wifi.active(True)
+wlan = WLAN(mode=WLAN.STA)
 
-# Connect to the WiFi network
-wifi.connect(WIFI_SSID, PASSWORD)
+wlan.connect(ssid=WIFI_SSID, auth=(WLAN.WPA2, PASSWORD))
 
 # Wait until the device is connected to the WiFi network
-while not wifi.isconnected():
-    time.sleep(1)
-    # display a red led while waiting for the connection
-    pycom.rgbled(0xFF0000)
+while not wlan.isconnected():
+    machine.idle()
 
 # Display a green led when the device is connected to the WiFi network
 pycom.rgbled(0x00FF00)
