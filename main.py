@@ -1,7 +1,7 @@
 import time # for time.sleep()
 import machine # for machine.deepsleep()
 from network import connect_to_wifi, reconnect_to_wifi
-from sensor import measure_distance
+from sensor import Sensor
 from thingspeak import connect_to_thingspeak, pub_to_thingspeak
 
 # Network Credentials
@@ -24,34 +24,48 @@ THINGSPEAK_API_KEY = 'V1WGRM3WH4CZJSZW'  # Replace with your ThingSpeak API key
 
 # Constants about calculation and logic
 THREESHOLD = 4 # Value where window is considered opened (in cm)
+NB_SENSORS = 1 # Number of sensors
+
+# Define pin numbers for the sensors
+# Pin are are like such :
+# ECHO_PINS = [ECHO_SENSOR_1, ECHO_SENSOR_2]
+# TRIG_PINS = [TRIG_SENSOR_1, TRIG_SENSOR_2]
+ECHO_PINS = [11, 13]
+TRIG_PINS = [12, 14]
+
+# ----- Initial setup -----
+sensors = [Sensor(TRIG_PINS[i], ECHO_PINS[i]) for i in range(NB_SENSORS)]
 
 window_state = None
 
-# ----- Initial setup -----
 wlan = connect_to_wifi(WIFI_SSID, PASSWORD)
 reconnect_to_wifi(wlan)
 
 client = connect_to_thingspeak(THINGSPEAK_CLIENT_ID, THINGSPEAK_MQTT_HOST, THINGSPEAK_MQTT_PASSWORD)
 
+# ----- Main loop -----
+
 while True:
-    # Measure the distance
-    distance = measure_distance()
+    new_states = [None for _ in range(NB_SENSORS)]
+    for i in range(NB_SENSORS):
+        # Measure the distance
+        distance = sensors[i].measure_distance()
 
-    new_state = 0 if distance < THREESHOLD else 1
-    
-    if window_state is not None and window_state != new_state:
-        print('Window has been ' + ('closed' if new_state == 0 else 'opened'))
-        pub_to_thingspeak(new_state)
-    else:
-        print('No change in window state')
+        # Define the new state
+        new_states[i] = 0 if distance < THREESHOLD else 1
 
-    if window_state is None:
-        # Always publish the first state (in case of reboot)
-        print('Sending first state: ' + ('closed' if new_state == 0 else 'opened'))
-        pub_to_thingspeak(new_state)
-
-    # Update the window state
-    window_state = new_state
+        # If we are in the last iteration, we check state changes
+        if i == NB_SENSORS - 1:
+            # Always publish the window state if it is None (in case of first launch or reboot)
+            if window_state is None:
+                window_state = sensors[i].window_state(NB_SENSORS, new_states[0], new_states[1] if NB_SENSORS == 2 else 0)
+                pub_to_thingspeak(client, THINGSPEAK_CHANNEL_ID, THINGSPEAK_API_KEY, THINGSPEAK_PUB_FIELD, window_state)
+            else:
+                # If the window state is not None, we check new_window_state
+                new_window_state = sensors[i].window_state(NB_SENSORS, new_states[0], new_states[1] if NB_SENSORS == 2 else 0)
+                if new_window_state != window_state:
+                    window_state = new_window_state
+                    pub_to_thingspeak(client, THINGSPEAK_CHANNEL_ID, THINGSPEAK_API_KEY, THINGSPEAK_PUB_FIELD, window_state)
 
     # Wait x seconds (test purposes)
     time.sleep(5)
