@@ -24,6 +24,9 @@ THINGSPEAK_MQTT_PASSWORD = 'U0rTBfXygeELaHRtv7Pn4zEw'
 THINGSPEAK_CHANNEL_ID = '2402819'
 THINGSPEAK_API_KEY = 'V1WGRM3WH4CZJSZW'  # Replace with your ThingSpeak API key
 
+# Constants about calculation and logic
+THREESHOLD = 4 # cm
+
 window_state = None
 
 # ----- Define Pins -----
@@ -40,18 +43,27 @@ def measure_distance():
     time.sleep_us(10)
     trig.value(0)
 
+    # Define a timeout (in microseconds) in case we miss the pulse
+    timeout = 1_000_000
+
+    # Start a timer
+    start = time.ticks_us()
+
     # Wait for the pulse to be sent and return.
     while echo.value() == 0:
-        pass
-    start = time.ticks_us()
+        if time.ticks_diff(time.ticks_us(), start) > timeout:
+            return 200 # returned value is 200 cm (if no object is detected)
+
+    pulse_start = time.ticks_us()
 
     # Wait for the pulse to return.
     while echo.value() == 1:
-        pass
-    finish = time.ticks_us()
+        if time.ticks_diff(time.ticks_us(), start) > timeout:
+            return 200 # returned value is 200 cm (if no object is detected)
+    pulse_end = time.ticks_us()
 
     # Calculate the distance in cm (sound travels at about 343m/s).
-    distance = ((finish - start) / 1_000_000) * 34300 / 2
+    distance = ((pulse_end - pulse_start) / 1_000_000) * 34300 / 2
 
     return distance
 
@@ -95,7 +107,7 @@ while True:
     # Measure the distance
     distance = measure_distance()
 
-    new_state = 0 if distance < 4 else 1
+    new_state = 0 if distance < THREESHOLD else 1
 
     print('Distance: ' + str(distance) + ' cm')
     
